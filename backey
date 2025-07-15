@@ -1,0 +1,92 @@
+from flask import Flask, request, jsonify
+import openai
+import speech_recognition as sr
+from werkzeug.utils import secure_filename
+import os
+import datetime
+
+app = Flask(name)
+
+# Configuration
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# Initialize services
+recognizer = sr.Recognizer()
+openai.api_key = 'your-openai-key'
+
+# Product database simulation
+product_db = {
+    'farmers': {},
+    'artists': {},
+    'kirana': {}
+}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def generate_description(product_info, business_type):
+    prompt = f"""
+    Generate a professional product description for a {business_type} business.
+    Product details: {product_info}
+    Include relevant details like:
+    - For farmers: crop variety, harvest time, organic status
+    - For artists: materials, dimensions, inspiration
+    - For kirana: brand, weight, expiry date
+    """
+    
+    response = openai.Completion.create(
+        engine="text-davinci-003",
+        prompt=prompt,
+        max_tokens=150
+    )
+    return response.choices[0].text.strip()
+
+@app.route('/add_product', methods=['POST'])
+def add_product():
+    business_type = request.form.get('business_type')
+    user_id = request.form.get('user_id')
+    
+    if user_id not in product_db[business_type]:
+        product_db[business_type][user_id] = {}
+
+    # Handle voice input
+    if 'audio' in request.files:
+        audio_file = request.files['audio']
+        with sr.AudioFile(audio_file) as source:
+            audio_data = recognizer.record(source)
+            product_info = recognizer.recognize_google(audio_data)
+    else:
+        product_info = request.form.get('product_info')
+    
+    # Handle image upload
+    image_path = None
+    if 'image' in request.files:
+        file = request.files['image']
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+            file.save(image_path)
+    
+    # Generate description
+    description = generate_description(product_info, business_type)
+    
+    # Store product
+    product_id = f"prod_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
+    product_db[business_type][user_id][product_id] = {
+        'info': product_info,
+        'description': description,
+        'image': image_path,
+        'timestamp': datetime.datetime.now().isoformat()
+    }
+    
+    return jsonify({
+        'status': 'success',
+        'product_id': product_id,
+        'description': description
+    })
+
+if name == 'main':
+    app.run(debug=True)
