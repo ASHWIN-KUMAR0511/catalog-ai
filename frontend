@@ -1,0 +1,131 @@
+import React, { useState, useRef } from 'react';
+import axios from 'axios';
+
+function ProductCatalog() {
+  const [businessType, setBusinessType] = useState('kirana');
+  const [inputMethod, setInputMethod] = useState('text');
+  const [productInfo, setProductInfo] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [generatedDesc, setGeneratedDesc] = useState('');
+  const [imagePreview, setImagePreview] = useState(null);
+  
+  const audioRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData();
+    formData.append('business_type', businessType);
+    formData.append('user_id', 'current_user_id');
+    
+    if (inputMethod === 'voice' && audioRef.current) {
+      formData.append('audio', audioRef.current);
+    } else {
+      formData.append('product_info', productInfo);
+    }
+    
+    if (fileInputRef.current.files[0]) {
+      formData.append('image', fileInputRef.current.files[0]);
+    }
+    
+    try {
+      const response = await axios.post('/add_product', formData);
+      setGeneratedDesc(response.data.description);
+    } catch (error) {
+      console.error('Error:', error);
+    }
+  };
+
+  const startRecording = () => {
+    setIsRecording(true);
+    // Implement recording logic using Web Audio API
+  };
+
+  const stopRecording = () => {
+    setIsRecording(false);
+    // Stop recording and set audioRef
+  };
+
+  return (
+    <div className="container">
+      <h1>Digital Product Catalog Assistant</h1>
+      
+      <form onSubmit={handleSubmit}>
+        <div className="form-group">
+          <label>Business Type:</label>
+          <select value={businessType} onChange={(e) => setBusinessType(e.target.value)}>
+            <option value="farmers">Farmer</option>
+            <option value="artists">Artist</option>
+            <option value="kirana">Kirana Store</option>
+          </select>
+        </div>
+        
+        <div className="form-group">
+          <label>Input Method:</label>
+          <div>
+            <label>
+              <input 
+                type="radio" 
+                checked={inputMethod === 'text'}
+                onChange={() => setInputMethod('text')}
+              />
+              Text
+            </label>
+            <label>
+              <input 
+                type="radio" 
+                checked={inputMethod === 'voice'}
+                onChange={() => setInputMethod('voice')}
+              />
+              Voice
+            </label>
+          </div>
+        </div>
+        
+        {inputMethod === 'text' ? (
+          <div className="form-group">
+            <label>Product Details:</label>
+            <textarea 
+              value={productInfo}
+              onChange={(e) => setProductInfo(e.target.value)}
+              placeholder="E.g., 'Fresh tomatoes harvested yesterday, 10kg available'"
+            />
+          </div>
+        ) : (
+          <div className="form-group">
+            <button type="button" onClick={isRecording ? stopRecording : startRecording}>
+              {isRecording ? 'Stop Recording' : 'Start Recording'}
+            </button>
+          </div>
+        )}
+        
+        <div className="form-group">
+          <label>Product Image (Optional):</label>
+          <input 
+            type="file" 
+            ref={fileInputRef}
+            accept="image/*"
+            onChange={(e) => {
+              if (e.target.files[0]) {
+                setImagePreview(URL.createObjectURL(e.target.files[0]));
+              }
+            }}
+          />
+          {imagePreview && <img src={imagePreview} alt="Preview" style={{maxWidth: '200px'}} />}
+        </div>
+        
+        <button type="submit">Add to Catalog</button>
+      </form>
+      
+      {generatedDesc && (
+        <div className="result">
+          <h3>Generated Description:</h3>
+          <p>{generatedDesc}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default ProductCatalog;
